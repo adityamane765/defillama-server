@@ -1211,13 +1211,16 @@ async function generateAggregatedHistoricalCharts(metadata: RWAMetadata[]): Prom
     }
   }
 
-  // Process each asset's pg-cache for chain breakdown
+  // Fetch all pg-caches in parallel, then process sequentially to avoid race conditions on shared maps
+  const pgCacheResults = await Promise.all(metadata.map((m) => readPGCacheForId(m.id).catch(() => null)));
+
   let processedCount = 0;
-  for (const m of metadata) {
+  for (let mi = 0; mi < metadata.length; mi++) {
+    const m = metadata[mi];
     const canonicalMarketId = m.data.canonicalMarketId;
     if (!canonicalMarketId) continue;
 
-    const pgCache = await readPGCacheForId(m.id);
+    const pgCache = pgCacheResults[mi];
     if (!pgCache) continue;
 
     const categories = Array.isArray(m.data.category) ? m.data.category.filter(Boolean) : [];
@@ -1374,95 +1377,78 @@ async function generateAggregatedHistoricalCharts(metadata: RWAMetadata[]): Prom
 
   await alertSuspiciousRwaHistoricalCharts(byChainTickerBreakdown['all'], metadata);
 
-  // Store chain charts (includes "All" and individual chains)
+  const rawChainBreakdownAndAssetTypes = toTimeseriesBreakdownChart(chainBreakdownAndAssetTypes, true);
+  const rawCategoryBreakdownAndAssetTypes = toTimeseriesBreakdownChart(categoryBreakdownAndAssetTypes);
+  const rawPlatformBreakdownAndAssetTypes = toTimeseriesBreakdownChart(platformBreakdownAndAssetTypes);
+  const rawAssetGroupBreakdownAndAssetTypes = toTimeseriesBreakdownChart(assetGroupBreakdownAndAssetTypes);
+
+  const storeOps: Promise<void>[] = [];
+
   for (const [chain, timestampMap] of Object.entries(byChain)) {
-    const chainLabel = getChainLabelFromKey(chain);
-    const key = rwaSlug(chainLabel);
-    await storeRouteData(`charts/chain/${key}.json`, toSortedArray(timestampMap));
+    const key = rwaSlug(getChainLabelFromKey(chain));
+    storeOps.push(storeRouteData(`charts/chain/${key}.json`, toSortedArray(timestampMap)));
   }
-  
-  // Store chain charts - breakdown by asset key
   for (const [chain, dataMap] of Object.entries(byChainTickerBreakdown)) {
-    const chainLabel = getChainLabelFromKey(chain);
-    const key = rwaSlug(chainLabel);
-    await storeRouteData(`charts/chain-asset-breakdown/${key}.json`, {
+    const key = rwaSlug(getChainLabelFromKey(chain));
+    storeOps.push(storeRouteData(`charts/chain-asset-breakdown/${key}.json`, {
       onChainMcap: toSortedArrayBreakdown(dataMap.onChainMcap),
       activeMcap: toSortedArrayBreakdown(dataMap.activeMcap),
       defiActiveTvl: toSortedArrayBreakdown(dataMap.defiActiveTvl),
-    });
+    }));
   }
-
-  // Store chain charts - chain breakdown by asset types
-  const rawChainBreakdownAndAssetTypes = toTimeseriesBreakdownChart(chainBreakdownAndAssetTypes, true);
   for (const [rawKey, rawData] of Object.entries(rawChainBreakdownAndAssetTypes)) {
-    await storeRouteData(`charts/chain-breakdown/${rawKey}.json`, (rawData as Array<any>).sort((a, b) => a.timestamp > b.timestamp ? 1 : -1));
+    storeOps.push(storeRouteData(`charts/chain-breakdown/${rawKey}.json`, (rawData as Array<any>).sort((a, b) => a.timestamp > b.timestamp ? 1 : -1)));
   }
 
-  // Store category charts
   for (const [category, timestampMap] of Object.entries(byCategory)) {
     const key = rwaSlug(category);
-    await storeRouteData(`charts/category/${key}.json`, toSortedArray(timestampMap));
+    storeOps.push(storeRouteData(`charts/category/${key}.json`, toSortedArray(timestampMap)));
   }
-  
-  // Store category charts - breakdown by asset key
   for (const [category, dataMap] of Object.entries(byCategoryTickerBreakdown)) {
     const key = rwaSlug(category);
-    await storeRouteData(`charts/category-asset-breakdown/${key}.json`, {
+    storeOps.push(storeRouteData(`charts/category-asset-breakdown/${key}.json`, {
       onChainMcap: toSortedArrayBreakdown(dataMap.onChainMcap),
       activeMcap: toSortedArrayBreakdown(dataMap.activeMcap),
       defiActiveTvl: toSortedArrayBreakdown(dataMap.defiActiveTvl),
-    });
+    }));
   }
-  
-  // Store category charts - category breakdown by asset types
-  const rawCategoryBreakdownAndAssetTypes = toTimeseriesBreakdownChart(categoryBreakdownAndAssetTypes);
   for (const [rawKey, rawData] of Object.entries(rawCategoryBreakdownAndAssetTypes)) {
-    await storeRouteData(`charts/category-breakdown/${rawKey}.json`, (rawData as Array<any>).sort((a, b) => a.timestamp > b.timestamp ? 1 : -1));
+    storeOps.push(storeRouteData(`charts/category-breakdown/${rawKey}.json`, (rawData as Array<any>).sort((a, b) => a.timestamp > b.timestamp ? 1 : -1)));
   }
 
-  // Store platform charts
   for (const [platform, timestampMap] of Object.entries(byPlatform)) {
     const key = rwaSlug(platform);
-    await storeRouteData(`charts/platform/${key}.json`, toSortedArray(timestampMap));
+    storeOps.push(storeRouteData(`charts/platform/${key}.json`, toSortedArray(timestampMap)));
   }
-  
-  // Store platform charts - breakdown by asset key
   for (const [platform, dataMap] of Object.entries(byPlatformTickerBreakdown)) {
     const key = rwaSlug(platform);
-    await storeRouteData(`charts/platform-asset-breakdown/${key}.json`, {
+    storeOps.push(storeRouteData(`charts/platform-asset-breakdown/${key}.json`, {
       onChainMcap: toSortedArrayBreakdown(dataMap.onChainMcap),
       activeMcap: toSortedArrayBreakdown(dataMap.activeMcap),
       defiActiveTvl: toSortedArrayBreakdown(dataMap.defiActiveTvl),
-    });
+    }));
   }
-  
-  // Store platform charts - platform breakdown by asset types
-  const rawPlatformBreakdownAndAssetTypes = toTimeseriesBreakdownChart(platformBreakdownAndAssetTypes);
   for (const [rawKey, rawData] of Object.entries(rawPlatformBreakdownAndAssetTypes)) {
-    await storeRouteData(`charts/platform-breakdown/${rawKey}.json`, (rawData as Array<any>).sort((a, b) => a.timestamp > b.timestamp ? 1 : -1));
+    storeOps.push(storeRouteData(`charts/platform-breakdown/${rawKey}.json`, (rawData as Array<any>).sort((a, b) => a.timestamp > b.timestamp ? 1 : -1)));
   }
 
-  // Store assetGroup charts
   for (const [ag, timestampMap] of Object.entries(byAssetGroup)) {
     const key = rwaSlug(ag);
-    await storeRouteData(`charts/assetGroup/${key}.json`, toSortedArray(timestampMap));
+    storeOps.push(storeRouteData(`charts/assetGroup/${key}.json`, toSortedArray(timestampMap)));
   }
-
-  // Store assetGroup charts - breakdown by asset key
   for (const [ag, dataMap] of Object.entries(byAssetGroupTickerBreakdown)) {
     const key = rwaSlug(ag);
-    await storeRouteData(`charts/assetGroup-asset-breakdown/${key}.json`, {
+    storeOps.push(storeRouteData(`charts/assetGroup-asset-breakdown/${key}.json`, {
       onChainMcap: toSortedArrayBreakdown(dataMap.onChainMcap),
       activeMcap: toSortedArrayBreakdown(dataMap.activeMcap),
       defiActiveTvl: toSortedArrayBreakdown(dataMap.defiActiveTvl),
-    });
+    }));
+  }
+  for (const [rawKey, rawData] of Object.entries(rawAssetGroupBreakdownAndAssetTypes)) {
+    storeOps.push(storeRouteData(`charts/assetGroup-breakdown/${rawKey}.json`, (rawData as Array<any>).sort((a, b) => a.timestamp > b.timestamp ? 1 : -1)));
   }
 
-  // Store assetGroup breakdown by asset types
-  const rawAssetGroupBreakdownAndAssetTypes = toTimeseriesBreakdownChart(assetGroupBreakdownAndAssetTypes);
-  for (const [rawKey, rawData] of Object.entries(rawAssetGroupBreakdownAndAssetTypes)) {
-    await storeRouteData(`charts/assetGroup-breakdown/${rawKey}.json`, (rawData as Array<any>).sort((a, b) => a.timestamp > b.timestamp ? 1 : -1));
-  }
+  await Promise.all(storeOps);
 
   console.log(`Generated aggregated historical charts in ${Date.now() - startTime}ms`);
   console.log(`  Processed ${processedCount} assets. Chains: ${Object.keys(byChain).length}, Categories: ${Object.keys(byCategory).length}, Platforms: ${Object.keys(byPlatform).length}, AssetGroups: ${Object.keys(byAssetGroup).length}`);
