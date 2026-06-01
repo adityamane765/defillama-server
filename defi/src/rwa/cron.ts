@@ -1212,9 +1212,10 @@ async function generateAggregatedHistoricalCharts(metadata: RWAMetadata[]): Prom
     }
   }
 
-  // Fetch pg-caches with bounded concurrency to avoid memory spikes from loading all files at once
+  // Fetch pg-caches with bounded concurrency to avoid memory spikes from loading all files at once.
+  // Concurrency of 20 works well for local disk reads — tune this value based on available memory and file sizes.
   const { results: pgCacheResults } = await PromisePool
-    .withConcurrency(10)
+    .withConcurrency(20)
     .for(metadata)
     .process((m) => readPGCacheForId(m.id).catch(() => null));
 
