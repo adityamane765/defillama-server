@@ -1,4 +1,5 @@
 require("dotenv").config();
+import { PromisePool } from '@supercharge/promise-pool';
 
 import {
   storeRouteData,
@@ -1211,8 +1212,11 @@ async function generateAggregatedHistoricalCharts(metadata: RWAMetadata[]): Prom
     }
   }
 
-  // Fetch all pg-caches in parallel, then process sequentially to avoid race conditions on shared maps
-  const pgCacheResults = await Promise.all(metadata.map((m) => readPGCacheForId(m.id).catch(() => null)));
+  // Fetch pg-caches with bounded concurrency to avoid memory spikes from loading all files at once
+  const { results: pgCacheResults } = await PromisePool
+    .withConcurrency(10)
+    .for(metadata)
+    .process((m) => readPGCacheForId(m.id).catch(() => null));
 
   let processedCount = 0;
   for (let mi = 0; mi < metadata.length; mi++) {
