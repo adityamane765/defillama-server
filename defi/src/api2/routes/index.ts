@@ -29,6 +29,7 @@ import { saveEvent } from "../../dexAggregators/db/saveEvent";
 import { reportError } from "../../reportError";
 import { reportError as reportSupport } from "../../reportSupport";
 import { saveBlacklistPemrit } from "../../dexAggregators/db/saveBlacklistPemrit";
+import { getCompareProtocols } from "./getCompareProtocols";
 
 export default function setRoutes(router: HyperExpress.Router, routerBasePath: string) {
   // todo add logging middleware to all routes
@@ -191,6 +192,7 @@ export default function setRoutes(router: HyperExpress.Router, routerBasePath: s
 
   // this includes special route financial statement
   router.get("/v2/metrics/:type/protocol/:name", ew(getDimensionProtocolRoutes('overview')))
+  router.get("/v2/compare/protocols", ew(getCompareProtocols))
   router.get("/v2/chart/:type/protocol/:name", ew(getDimensionProtocolRoutes('chart')))
   router.get("/v2/chart/:type/protocol/:name/chain-breakdown", ew(getDimensionProtocolRoutes('chart-chain-breakdown')))
   router.get("/v2/chart/:type/protocol/:name/version-breakdown", ew(getDimensionProtocolRoutes('chart-version-breakdown')))
