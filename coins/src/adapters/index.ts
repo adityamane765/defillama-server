@@ -98,6 +98,7 @@ export default {
   wombat: require("./markets/wombat"),
   wombatWrapped: require("./markets/wombat"),
   backed: require("./rwa/backed"),
+  pgold: require("./rwa/pgold"),
   xstocks: require("./rwa/xstocks"),
   wrappedXstocks: require("./rwa/xstocks"),
   vela: require("./yield/vela"),
