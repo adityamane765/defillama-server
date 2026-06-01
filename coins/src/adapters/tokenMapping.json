@@ -4401,6 +4401,11 @@
       "decimals": "18",
       "symbol": "cWETHv3",
       "to": "asset#arbitrum:0x82aF49447D8a07e3bd95BD0d56f35241523fBab1"
+    },
+    "0x3e76bb02286bfeaa89dd35f11253f2cbce634f91": {
+      "decimals": "18",
+      "symbol": "PGOLD",
+      "to": "coingecko#pleasing-gold"
     }
   },
   "tezos": {
@@ -12296,6 +12301,11 @@
       "to": "coingecko#apecoin",
       "decimals": 18,
       "symbol": "APE"
+    },
+    "0x64ae250e044688ddd04262f17daca23c28d241c2": {
+      "decimals": "18",
+      "symbol": "PGOLD",
+      "to": "coingecko#pleasing-gold"
     }
   },
   "hedera": {
